@@ -1,8 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import numpy as np
 from datetime import datetime
 import warnings
@@ -39,11 +36,13 @@ st.markdown("""
         border-left: 4px solid #3498db;
         margin: 0.5rem 0;
     }
-    .stMetric {
-        background-color: white;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    .section-header {
+        font-size: 1.5rem;
+        font-weight: 600;
+        color: #2c3e50;
+        margin: 2rem 0 1rem 0;
+        border-bottom: 2px solid #3498db;
+        padding-bottom: 0.5rem;
     }
     .priority-high {
         background-color: #e74c3c;
@@ -69,13 +68,19 @@ st.markdown("""
         font-size: 0.8rem;
         font-weight: 600;
     }
-    .section-header {
-        font-size: 1.5rem;
-        font-weight: 600;
-        color: #2c3e50;
-        margin: 2rem 0 1rem 0;
-        border-bottom: 2px solid #3498db;
-        padding-bottom: 0.5rem;
+    .insight-box {
+        background-color: #f8f9fa;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border-left: 4px solid #3498db;
+        margin: 1rem 0;
+    }
+    .action-box {
+        background-color: #fff3cd;
+        padding: 1.5rem;
+        border-radius: 10px;
+        border-left: 4px solid #ffc107;
+        margin: 1rem 0;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -83,7 +88,7 @@ st.markdown("""
 @st.cache_data
 def load_data():
     """Load and process the AI tool pipeline data"""
-    # Sample data structure based on your Excel file
+    # Your actual data from the Excel file
     data = [
         {"Name": "Enterprise GPT Subscription", "Requesting Stakeholder": "Briefly Level", "Target Quarter Date Release": "Not Assigned Yet", "Evaluation Status": "Budget Evaluation", "Prioritization Status": "P2", "Reviewed By": "Ankita Avadhani", "Potential Tool Name/  Phase of Exploring Tools": "Chat GPT Enterprise", "Total Priority Score": "", "Target Success Metric": "", "Estimated Budget": ""},
         {"Name": "Hubspot Copilot", "Requesting Stakeholder": "Bus Dev/ Revenue", "Target Quarter Date Release": "Not Assigned Yet", "Evaluation Status": "Budget Evaluation", "Prioritization Status": "P1", "Reviewed By": "Ankita Avadhani", "Potential Tool Name/  Phase of Exploring Tools": "GPT Integrations", "Total Priority Score": "", "Target Success Metric": "", "Estimated Budget": ""},
@@ -178,41 +183,32 @@ def create_executive_kpis(df):
         )
 
 def create_department_quarter_heatmap(df):
-    """Create the main department x quarter heatmap"""
+    """Create the main department x quarter roadmap using Streamlit charts"""
     st.markdown('<div class="section-header">🗓️ Department × Quarter Roadmap</div>', unsafe_allow_html=True)
     
-    # Create pivot table for heatmap
+    # Create pivot table for heatmap visualization
     pivot_data = df.groupby(['Department', 'Quarter_Clean']).size().reset_index(name='Tool_Count')
     pivot_table = pivot_data.pivot(index='Department', columns='Quarter_Clean', values='Tool_Count').fillna(0)
     
-    # Create heatmap
-    fig = px.imshow(
-        pivot_table,
-        labels=dict(x="Target Quarter", y="Department", color="Number of Tools"),
-        title="AI Tool Distribution by Department and Quarter",
-        color_continuous_scale="Blues",
-        aspect="auto"
+    # Display the heatmap data as a styled dataframe
+    st.subheader("Tool Distribution Matrix")
+    st.dataframe(
+        pivot_table.style.background_gradient(cmap='Blues', axis=None),
+        use_container_width=True
     )
     
-    # Add text annotations
-    for i, dept in enumerate(pivot_table.index):
-        for j, quarter in enumerate(pivot_table.columns):
-            value = pivot_table.loc[dept, quarter]
-            if value > 0:
-                fig.add_annotation(
-                    x=j, y=i,
-                    text=str(int(value)),
-                    showarrow=False,
-                    font=dict(color="white" if value > 2 else "black", size=14)
-                )
+    # Create bar chart for each quarter
+    col1, col2 = st.columns(2)
     
-    fig.update_layout(
-        height=500,
-        font_size=12,
-        title_font_size=16
-    )
+    with col1:
+        st.subheader("Tools by Department")
+        dept_totals = df['Department'].value_counts()
+        st.bar_chart(dept_totals)
     
-    st.plotly_chart(fig, use_container_width=True)
+    with col2:
+        st.subheader("Tools by Quarter")
+        quarter_totals = df['Quarter_Clean'].value_counts()
+        st.bar_chart(quarter_totals)
     
     return pivot_table
 
@@ -247,41 +243,26 @@ def create_quarter_drill_down(df):
                 unique_depts = quarter_data['Department'].nunique()
                 st.metric("Departments", unique_depts)
             
-            # Department breakdown
+            # Department breakdown chart
             st.subheader(f"Tools by Department - {quarter}")
-            dept_breakdown = quarter_data.groupby('Department').agg({
-                'Name': 'count',
-                'Priority': lambda x: (x == 'P1').sum()
-            }).rename(columns={'Name': 'Total_Tools', 'Priority': 'High_Priority'})
-            
-            # Create bar chart
-            fig = px.bar(
-                dept_breakdown.reset_index(),
-                x='Department',
-                y='Total_Tools',
-                title=f"Tool Distribution by Department - {quarter}",
-                color='High_Priority',
-                color_continuous_scale='Reds',
-                labels={'Total_Tools': 'Number of Tools', 'High_Priority': 'P1 Tools'}
-            )
-            fig.update_layout(height=400, xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+            dept_breakdown = quarter_data['Department'].value_counts()
+            st.bar_chart(dept_breakdown)
             
             # Detailed table
             st.subheader("Detailed Tool List")
             display_cols = ['Name', 'Department', 'Priority', 'Status', 'Reviewer', 'Tool_Technology']
             quarter_display = quarter_data[display_cols].copy()
             
-            # Color code priorities
-            def color_priority(val):
-                if val == 'P1':
-                    return 'background-color: #e74c3c; color: white'
-                elif val == 'P2':
-                    return 'background-color: #f39c12; color: white'
+            # Add color coding for priorities
+            def highlight_priority(row):
+                if row['Priority'] == 'P1':
+                    return ['background-color: #ffebee'] * len(row)
+                elif row['Priority'] == 'P2':
+                    return ['background-color: #fff3e0'] * len(row)
                 else:
-                    return 'background-color: #27ae60; color: white'
+                    return ['background-color: #e8f5e8'] * len(row)
             
-            styled_df = quarter_display.style.applymap(color_priority, subset=['Priority'])
+            styled_df = quarter_display.style.apply(highlight_priority, axis=1)
             st.dataframe(styled_df, use_container_width=True)
 
 def create_priority_analysis(df):
@@ -291,29 +272,26 @@ def create_priority_analysis(df):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Priority distribution pie chart
+        st.subheader("Priority Distribution")
         priority_counts = df['Priority'].value_counts()
-        fig = px.pie(
-            values=priority_counts.values,
-            names=priority_counts.index,
-            title="Priority Distribution",
-            color_discrete_map={'P1': '#e74c3c', 'P2': '#f39c12', 'P0': '#27ae60'}
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        st.bar_chart(priority_counts)
+        
+        # Show priority breakdown
+        for priority in ['P1', 'P2', 'P0']:
+            if priority in priority_counts:
+                count = priority_counts[priority]
+                percentage = (count / len(df)) * 100
+                priority_label = {'P1': 'High Priority', 'P2': 'Medium Priority', 'P0': 'Low Priority'}[priority]
+                st.write(f"**{priority_label}**: {count} tools ({percentage:.1f}%)")
     
     with col2:
-        # Priority by department
-        priority_dept = df.groupby(['Department', 'Priority']).size().reset_index(name='count')
-        fig = px.bar(
-            priority_dept,
-            x='Department',
-            y='count',
-            color='Priority',
-            title="Priority Distribution by Department",
-            color_discrete_map={'P1': '#e74c3c', 'P2': '#f39c12', 'P0': '#27ae60'}
-        )
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.subheader("High Priority Tools by Department")
+        high_priority_df = df[df['Priority'] == 'P1']
+        if len(high_priority_df) > 0:
+            high_priority_by_dept = high_priority_df['Department'].value_counts()
+            st.bar_chart(high_priority_by_dept)
+        else:
+            st.info("No high priority tools found")
 
 def create_status_pipeline(df):
     """Create status pipeline analysis"""
@@ -322,77 +300,19 @@ def create_status_pipeline(df):
     col1, col2 = st.columns(2)
     
     with col1:
-        # Status distribution
+        st.subheader("Current Status Distribution")
         status_counts = df['Status'].value_counts()
-        fig = px.bar(
-            x=status_counts.index,
-            y=status_counts.values,
-            title="Current Status Distribution",
-            color=status_counts.values,
-            color_continuous_scale='Blues'
-        )
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.bar_chart(status_counts)
+        
+        # Show status details
+        for status, count in status_counts.items():
+            percentage = (count / len(df)) * 100
+            st.write(f"**{status}**: {count} tools ({percentage:.1f}%)")
     
     with col2:
-        # Status by quarter
-        status_quarter = df.groupby(['Quarter_Clean', 'Status']).size().reset_index(name='count')
-        fig = px.bar(
-            status_quarter,
-            x='Quarter_Clean',
-            y='count',
-            color='Status',
-            title="Status Distribution by Quarter",
-            color_discrete_sequence=px.colors.qualitative.Set3
-        )
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-
-def create_timeline_gantt(df):
-    """Create a Gantt-style timeline"""
-    st.markdown('<div class="section-header">📅 Executive Timeline</div>', unsafe_allow_html=True)
-    
-    # Filter out unscheduled items for timeline
-    timeline_df = df[~df['Quarter'].str.contains('Not Assigned', na=False)].copy()
-    
-    if len(timeline_df) == 0:
-        st.warning("No tools have been scheduled with specific quarters yet.")
-        return
-    
-    # Create a simplified timeline visualization
-    timeline_summary = timeline_df.groupby(['Quarter_Clean', 'Department']).agg({
-        'Name': lambda x: ', '.join(x.head(3)) + ('...' if len(x) > 3 else ''),
-        'Priority': lambda x: list(x)
-    }).reset_index()
-    
-    # Create timeline chart
-    fig = go.Figure()
-    
-    departments = timeline_summary['Department'].unique()
-    colors = px.colors.qualitative.Set3
-    
-    for i, dept in enumerate(departments):
-        dept_data = timeline_summary[timeline_summary['Department'] == dept]
-        fig.add_trace(go.Scatter(
-            x=dept_data['Quarter_Clean'],
-            y=[dept] * len(dept_data),
-            mode='markers+text',
-            marker=dict(size=20, color=colors[i % len(colors)]),
-            text=[f"{len(p)} tools" for p in dept_data['Priority']],
-            textposition="middle center",
-            name=dept,
-            hovertemplate=f"<b>{dept}</b><br>Quarter: %{{x}}<br>Tools: %{{text}}<extra></extra>"
-        ))
-    
-    fig.update_layout(
-        title="Executive Timeline Overview",
-        xaxis_title="Quarter",
-        yaxis_title="Department",
-        height=400,
-        showlegend=False
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+        st.subheader("Status by Priority")
+        status_priority = pd.crosstab(df['Status'], df['Priority'])
+        st.dataframe(status_priority)
 
 def create_executive_summary(df):
     """Create executive summary with key insights"""
@@ -409,39 +329,79 @@ def create_executive_summary(df):
         top_dept = df['Department'].value_counts().index[0]
         top_dept_count = df['Department'].value_counts().iloc[0]
         
-        insights = f"""
-        **Critical Actions Needed:**
-        - 🚨 {unscheduled} tools need quarter assignment
-        - 🔥 {high_priority} high-priority tools require immediate attention
-        - 📊 {top_dept} has the heaviest pipeline ({top_dept_count} tools)
+        insights_html = f"""
+        <div class="insight-box">
+        <h4>🚨 Critical Actions Needed:</h4>
+        <ul>
+        <li>{unscheduled} tools need quarter assignment</li>
+        <li>{high_priority} high-priority tools require immediate attention</li>
+        <li>{top_dept} has the heaviest pipeline ({top_dept_count} tools)</li>
+        </ul>
         
-        **Pipeline Health:**
-        - {len(df[df['Status'].str.contains('Budget', na=False)])} tools awaiting budget approval
-        - {len(df[df['Status'].str.contains('Pilot', na=False)])} tools in pilot phase
-        - {len(df[df['Reviewer'].str.contains('TBD', na=False)])} tools need reviewer assignment
+        <h4>📊 Pipeline Health:</h4>
+        <ul>
+        <li>{len(df[df['Status'].str.contains('Budget', na=False)])} tools awaiting budget approval</li>
+        <li>{len(df[df['Status'].str.contains('Pilot', na=False)])} tools in pilot phase</li>
+        <li>{len(df[df['Reviewer'].str.contains('TBD', na=False)])} tools need reviewer assignment</li>
+        </ul>
+        </div>
         """
-        st.markdown(insights)
+        st.markdown(insights_html, unsafe_allow_html=True)
     
     with col2:
         st.markdown("### 📋 Recommended Actions")
         
-        recommendations = """
-        **Immediate (This Week):**
-        1. Assign quarters to unscheduled high-priority tools
-        2. Allocate budget for tools in evaluation phase
-        3. Assign reviewers to unassigned tools
+        recommendations_html = """
+        <div class="action-box">
+        <h4>⚡ Immediate (This Week):</h4>
+        <ol>
+        <li>Assign quarters to unscheduled high-priority tools</li>
+        <li>Allocate budget for tools in evaluation phase</li>
+        <li>Assign reviewers to unassigned tools</li>
+        </ol>
         
-        **Short-term (This Month):**
-        1. Resource planning for Q3 2025 deliveries
-        2. Pilot program expansion decisions
-        3. Department capacity assessment
+        <h4>📅 Short-term (This Month):</h4>
+        <ol>
+        <li>Resource planning for Q3 2025 deliveries</li>
+        <li>Pilot program expansion decisions</li>
+        <li>Department capacity assessment</li>
+        </ol>
         
-        **Strategic (This Quarter):**
-        1. AI tool portfolio optimization
-        2. Cross-department collaboration planning
-        3. Success metrics definition
+        <h4>🎯 Strategic (This Quarter):</h4>
+        <ol>
+        <li>AI tool portfolio optimization</li>
+        <li>Cross-department collaboration planning</li>
+        <li>Success metrics definition</li>
+        </ol>
+        </div>
         """
-        st.markdown(recommendations)
+        st.markdown(recommendations_html, unsafe_allow_html=True)
+
+def create_detailed_analysis(df):
+    """Create detailed analysis sections"""
+    st.markdown('<div class="section-header">🔬 Detailed Analysis</div>', unsafe_allow_html=True)
+    
+    # Reviewer workload analysis
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Reviewer Workload")
+        reviewer_counts = df['Reviewer'].value_counts()
+        st.bar_chart(reviewer_counts)
+    
+    with col2:
+        st.subheader("Technology Focus Areas")
+        tech_keywords = []
+        for tech in df['Tool_Technology'].dropna():
+            if tech and tech != 'TBD':
+                tech_keywords.append(tech.split()[0] if tech.split() else 'Other')
+        
+        if tech_keywords:
+            tech_df = pd.DataFrame(tech_keywords, columns=['Technology'])
+            tech_counts = tech_df['Technology'].value_counts().head(10)
+            st.bar_chart(tech_counts)
+        else:
+            st.info("Technology information being evaluated")
 
 def main():
     """Main dashboard function"""
@@ -450,32 +410,45 @@ def main():
     st.markdown('<div class="sub-header">Executive Strategic Overview | COO Dashboard</div>', unsafe_allow_html=True)
     st.markdown(f"*Last Updated: {datetime.now().strftime('%B %d, %Y at %I:%M %p')}*")
     
+    st.markdown("---")
+    
     # Load data
     df = load_data()
     
     # Executive KPIs
+    st.markdown("## 📊 Executive Dashboard")
     create_executive_kpis(df)
+    
+    st.markdown("---")
     
     # Main roadmap heatmap
     pivot_table = create_department_quarter_heatmap(df)
     
+    st.markdown("---")
+    
     # Quarter breakdown with drill-down
     create_quarter_drill_down(df)
     
-    # Additional analysis sections
-    col1, col2 = st.columns(2)
+    st.markdown("---")
     
+    # Priority and status analysis
+    col1, col2 = st.columns(2)
     with col1:
         create_priority_analysis(df)
-    
     with col2:
         create_status_pipeline(df)
     
-    # Timeline visualization
-    create_timeline_gantt(df)
+    st.markdown("---")
+    
+    # Detailed analysis
+    create_detailed_analysis(df)
+    
+    st.markdown("---")
     
     # Executive summary
     create_executive_summary(df)
+    
+    st.markdown("---")
     
     # Raw data table (collapsible)
     with st.expander("📊 Complete Data Table", expanded=False):
