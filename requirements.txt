@@ -1,4 +1,22 @@
-streamlit==1.37.0
-pandas==2.2.2
-plotly==5.24.0
-numpy==1.26.4
+# Core Streamlit Framework
+streamlit>=1.28.0
+
+# Data Processing
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Visualization
+plotly>=5.15.0
+
+# Excel File Handling (if you want to load directly from Excel)
+openpyxl>=3.1.0
+xlrd>=2.0.1
+
+# Additional utilities (optional but recommended)
+python-dateutil>=2.8.2
+
+# For better styling (optional)
+streamlit-aggrid>=0.3.4
+
+# For enhanced charts (optional)
+streamlit-plotly-events>=0.0.6
